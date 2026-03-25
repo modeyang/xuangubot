@@ -1,0 +1,13 @@
+node_modules/
+.nuxt/
+.output/
+.venv/
+.DS_Store
+.superpowers/
+hts-cache/
+hts-log.txt
+storage/db/
+storage/raw/
+storage/uploads/
+storage/backups/
+storage/app.sqlite

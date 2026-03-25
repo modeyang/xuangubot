@@ -1,0 +1,20 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1774410695302,
+      "tag": "0000_youthful_slayback",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1774412529250,
+      "tag": "0001_left_namor",
+      "breakpoints": true
+    }
+  ]
+}

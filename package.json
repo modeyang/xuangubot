@@ -1,0 +1,35 @@
+{
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "nuxt dev",
+    "build": "nuxt build",
+    "test": "npm run test:unit && npm run test:integration",
+    "test:all": "npm run test && npm run test:python",
+    "test:unit": "vitest run tests/unit --passWithNoTests",
+    "test:integration": "vitest run",
+    "test:python": "if [ -d tests/python ]; then pytest tests/python -q; else echo 'no python tests (Task 1)'; fi",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:prepare": "npm run db:migrate && node --import tsx scripts/apply-manual-migrations.ts",
+    "bootstrap:admin": "node --import tsx scripts/bootstrap-admin.ts",
+    "seed:plans": "node --import tsx scripts/seed-plans.ts",
+    "seed:homepage": "node --import tsx scripts/seed-homepage.ts",
+    "seed:fixtures": "node --import tsx scripts/seed-fixtures.ts"
+  },
+  "dependencies": {
+    "better-sqlite3": "*",
+    "drizzle-orm": "*",
+    "nuxt": "^3.0.0",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@nuxt/test-utils": "^3.0.0",
+    "@types/node": "^25.5.0",
+    "drizzle-kit": "*",
+    "happy-dom": "*",
+    "tsx": "^4.21.0",
+    "typescript": "^6.0.2",
+    "vitest": "^3.2.0"
+  }
+}

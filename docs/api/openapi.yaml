@@ -1,0 +1,471 @@
+openapi: 3.0.3
+info:
+  title: Xuangutong MVP Public API
+  version: 0.1.0
+  description: |
+    Public, read-only endpoints for the Nuxt MVP.
+
+servers:
+  - url: http://localhost:3000
+
+paths:
+  /api/home:
+    get:
+      summary: Home modules
+      description: Returns enabled homepage modules in display order.
+      responses:
+        '200':
+          description: OK
+          headers:
+            Cache-Control:
+              schema: { type: string }
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [modules]
+                properties:
+                  modules:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/HomeModule'
+
+  /api/plans:
+    get:
+      summary: Enabled billing plan
+      description: Returns the single enabled plan used by the MVP checkout.
+      responses:
+        '200':
+          description: OK
+          headers:
+            Cache-Control:
+              schema: { type: string }
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [plan]
+                properties:
+                  plan:
+                    $ref: '#/components/schemas/Plan'
+
+  /api/stocks/{symbol}:
+    get:
+      summary: Stock snapshot
+      parameters:
+        - name: symbol
+          in: path
+          required: true
+          description: Stock symbol as a string (leading zeroes preserved).
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          headers:
+            Cache-Control:
+              schema: { type: string }
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StockSnapshot'
+        '400':
+          description: Invalid symbol
+        '404':
+          description: Not found
+
+  /api/stocks/{symbol}/quotes:
+    get:
+      summary: Minute-level quote snapshots
+      parameters:
+        - name: symbol
+          in: path
+          required: true
+          schema: { type: string }
+        - name: limit
+          in: query
+          required: false
+          description: Max number of rows (default 240, max 2000).
+          schema: { type: integer, minimum: 1, maximum: 2000 }
+      responses:
+        '200':
+          description: OK
+          headers:
+            Cache-Control:
+              schema: { type: string }
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [symbol, quotes]
+                properties:
+                  symbol: { type: string }
+                  quotes:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/StockQuote'
+        '400':
+          description: Invalid symbol
+        '404':
+          description: Not found
+
+  /api/stocks/{symbol}/daily-bars:
+    get:
+      summary: Daily bars
+      parameters:
+        - name: symbol
+          in: path
+          required: true
+          schema: { type: string }
+        - name: limit
+          in: query
+          required: false
+          description: Max number of rows (default 120, max 3650).
+          schema: { type: integer, minimum: 1, maximum: 3650 }
+      responses:
+        '200':
+          description: OK
+          headers:
+            Cache-Control:
+              schema: { type: string }
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [symbol, dailyBars]
+                properties:
+                  symbol: { type: string }
+                  dailyBars:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/DailyBar'
+        '400':
+          description: Invalid symbol
+        '404':
+          description: Not found
+
+  /api/themes/{id}:
+    get:
+      summary: Theme details
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Numeric theme ID as a string.
+          schema:
+            type: string
+            pattern: '^[0-9]+$'
+      responses:
+        '200':
+          description: OK
+          headers:
+            Cache-Control:
+              schema: { type: string }
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ThemeDetails'
+        '400':
+          description: Invalid ID
+        '404':
+          description: Not found
+
+  /api/articles/{id}:
+    get:
+      summary: Article details
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Numeric article ID as a string.
+          schema:
+            type: string
+            pattern: '^[0-9]+$'
+      responses:
+        '200':
+          description: OK
+          headers:
+            Cache-Control:
+              schema: { type: string }
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ArticleDetails'
+        '400':
+          description: Invalid ID
+        '404':
+          description: Not found
+
+  /api/search:
+    get:
+      summary: Search (grouped)
+      parameters:
+        - name: q
+          in: query
+          required: true
+          description: Search query (min length 2).
+          schema:
+            type: string
+            minLength: 2
+            maxLength: 100
+      responses:
+        '200':
+          description: OK
+          headers:
+            Cache-Control:
+              schema: { type: string }
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchResponse'
+        '400':
+          description: Invalid query
+
+components:
+  schemas:
+    HomeModule:
+      type: object
+      required: [id, moduleKey, title]
+      properties:
+        id: { type: integer }
+        moduleKey: { type: string }
+        title: { type: string }
+        sortOrder: { type: integer, nullable: true }
+        config: { nullable: true }
+
+    Plan:
+      type: object
+      required: [id, planCode, name, durationDays, priceCents, enabled]
+      properties:
+        id: { type: integer }
+        planCode: { type: string }
+        name: { type: string }
+        durationDays: { type: integer }
+        priceCents: { type: integer }
+        enabled: { type: integer, description: '0 or 1 from SQLite' }
+
+    Stock:
+      type: object
+      required: [id, symbol, exchange]
+      properties:
+        id: { type: integer }
+        symbol: { type: string }
+        exchange: { type: string }
+        name: { type: string, nullable: true }
+        status: { type: string, nullable: true }
+        industry: { type: string, nullable: true }
+        profileJson: { type: string, nullable: true }
+
+    StockQuote:
+      type: object
+      required: [quotedAt]
+      properties:
+        quotedAt: { type: string, description: ISO timestamp }
+        lastPrice: { type: number, nullable: true }
+        pctChange: { type: number, nullable: true }
+        turnover: { type: number, nullable: true }
+        volume: { type: integer, nullable: true }
+
+    DailyBar:
+      type: object
+      required: [stockId, tradeDate]
+      properties:
+        stockId: { type: integer }
+        tradeDate: { type: string }
+        open: { type: number, nullable: true }
+        high: { type: number, nullable: true }
+        low: { type: number, nullable: true }
+        close: { type: number, nullable: true }
+        volume: { type: integer, nullable: true }
+        turnover: { type: number, nullable: true }
+
+    Theme:
+      type: object
+      required: [id, slug, name]
+      properties:
+        id: { type: integer }
+        slug: { type: string }
+        name: { type: string }
+        summary: { type: string, nullable: true }
+        sourceRef: { type: string, nullable: true }
+
+    ThemeSnapshot:
+      type: object
+      required: [capturedAt]
+      properties:
+        capturedAt: { type: string }
+        heatScore: { type: number, nullable: true }
+        rank: { type: integer, nullable: true }
+        payload: { nullable: true }
+
+    Article:
+      type: object
+      required: [id, slug, title, articleType, visibility, status]
+      properties:
+        id: { type: integer }
+        slug: { type: string }
+        title: { type: string }
+        excerpt: { type: string, nullable: true }
+        bodyMarkdown: { type: string, nullable: true }
+        bodyHtml: { type: string, nullable: true }
+        articleType: { type: string }
+        visibility: { type: string }
+        status: { type: string }
+        coverUrl: { type: string, nullable: true }
+        publishedAt: { type: string, nullable: true }
+        sourceName: { type: string, nullable: true }
+        sourceRef: { type: string, nullable: true }
+
+    StockSnapshot:
+      type: object
+      required: [stock, quote, themes, articles, announcements]
+      properties:
+        stock:
+          $ref: '#/components/schemas/Stock'
+        quote:
+          allOf:
+            - $ref: '#/components/schemas/StockQuote'
+          nullable: true
+        themes:
+          type: array
+          items:
+            type: object
+            required: [id, slug, name, score, source]
+            properties:
+              id: { type: integer }
+              slug: { type: string }
+              name: { type: string }
+              summary: { type: string, nullable: true }
+              score: { type: number, nullable: true }
+              source: { type: string, nullable: true }
+        articles:
+          type: array
+          items:
+            $ref: '#/components/schemas/ArticleSummary'
+        announcements:
+          type: array
+          items:
+            $ref: '#/components/schemas/Announcement'
+
+    ThemeDetails:
+      type: object
+      required: [theme, stocks, snapshot, articles]
+      properties:
+        theme:
+          $ref: '#/components/schemas/Theme'
+        stocks:
+          type: array
+          items:
+            $ref: '#/components/schemas/ThemeStock'
+        snapshot:
+          allOf:
+            - $ref: '#/components/schemas/ThemeSnapshot'
+          nullable: true
+        articles:
+          type: array
+          items:
+            $ref: '#/components/schemas/ArticleSummary'
+
+    ArticleDetails:
+      type: object
+      required: [article, access, relatedStocks, relatedThemes]
+      properties:
+        article:
+          $ref: '#/components/schemas/Article'
+        access:
+          type: object
+          required: [visibility, allowed, reason]
+          properties:
+            visibility: { type: string }
+            allowed: { type: boolean }
+            reason: { type: string, nullable: true }
+        relatedStocks:
+          type: array
+          items:
+            type: object
+            required: [id, symbol, exchange]
+            properties:
+              id: { type: integer }
+              symbol: { type: string }
+              exchange: { type: string }
+              name: { type: string, nullable: true }
+              status: { type: string, nullable: true }
+              industry: { type: string, nullable: true }
+        relatedThemes:
+          type: array
+          items:
+            $ref: '#/components/schemas/Theme'
+
+    SearchResponse:
+      type: object
+      required: [stocks, themes, articles]
+      properties:
+        stocks:
+          type: array
+          items:
+            type: object
+            required: [id, symbol, exchange]
+            properties:
+              id: { type: integer }
+              symbol: { type: string }
+              exchange: { type: string }
+              name: { type: string, nullable: true }
+              status: { type: string, nullable: true }
+              industry: { type: string, nullable: true }
+        themes:
+          type: array
+          items:
+            $ref: '#/components/schemas/Theme'
+        articles:
+          type: array
+          items:
+            type: object
+            required: [id, slug, title, articleType, publishedAt, sourceName]
+            properties:
+              id: { type: integer }
+              slug: { type: string }
+              title: { type: string }
+              excerpt: { type: string, nullable: true }
+              articleType: { type: string }
+              publishedAt: { type: string, nullable: true }
+              sourceName: { type: string, nullable: true }
+
+    ThemeStock:
+      type: object
+      required: [id, symbol, exchange, score, source]
+      properties:
+        id: { type: integer }
+        symbol: { type: string }
+        exchange: { type: string }
+        name: { type: string, nullable: true }
+        status: { type: string, nullable: true }
+        industry: { type: string, nullable: true }
+        profileJson: { type: string, nullable: true }
+        score: { type: number, nullable: true }
+        source: { type: string, nullable: true }
+
+    ArticleSummary:
+      type: object
+      required: [id, slug, title, articleType, visibility, status]
+      properties:
+        id: { type: integer }
+        slug: { type: string }
+        title: { type: string }
+        excerpt: { type: string, nullable: true }
+        articleType: { type: string }
+        visibility: { type: string }
+        status: { type: string }
+        coverUrl: { type: string, nullable: true }
+        publishedAt: { type: string, nullable: true }
+        sourceName: { type: string, nullable: true }
+
+    Announcement:
+      type: object
+      required: [id, title]
+      properties:
+        id: { type: integer }
+        title: { type: string }
+        summary: { type: string, nullable: true }
+        publishedAt: { type: string, nullable: true }
+        sourceName: { type: string, nullable: true }
+        sourceUrl: { type: string, nullable: true }
