@@ -47,18 +47,16 @@ async function main() {
 
   const { sqlite } = getDb()
   const tx = sqlite.transaction(() => {
-    const keys = seeds.map((s) => s.moduleKey)
-    const placeholders = keys.map(() => '?').join(',')
-    sqlite.prepare(`DELETE FROM homepage_modules WHERE module_key IN (${placeholders})`).run(...keys)
-
-    const stmt = sqlite.prepare(
+    const deleteStmt = sqlite.prepare(`DELETE FROM homepage_modules WHERE module_key = ?`)
+    const insertStmt = sqlite.prepare(
       `
       INSERT INTO homepage_modules(module_key, title, config_json, sort_order, enabled)
       VALUES (?, ?, ?, ?, ?)
     `,
     )
     for (const seed of seeds) {
-      stmt.run(seed.moduleKey, seed.title, JSON.stringify(seed.config), seed.sortOrder, seed.enabled)
+      deleteStmt.run(seed.moduleKey)
+      insertStmt.run(seed.moduleKey, seed.title, JSON.stringify(seed.config), seed.sortOrder, seed.enabled)
     }
   })
   tx()

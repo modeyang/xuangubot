@@ -26,10 +26,28 @@ export async function createLoginCode(phone: string, codeHash: string) {
     .prepare(
       `
       INSERT INTO login_codes(phone, code_hash, expires_at, used_at, request_ip)
-      VALUES (?, ?, ?, NULL, NULL)
+      VALUES (?, ?, ?, NULL, ?)
     `,
     )
-    .run(phone, codeHash, expiresAt)
+    .run(phone, codeHash, expiresAt, null)
+
+  return Number(result.lastInsertRowid)
+}
+
+export async function createLoginCodeWithRequestIp(phone: string, codeHash: string, requestIp: string | null) {
+  const { sqlite } = getDb()
+
+  const createdAt = nowIso()
+  const expiresAt = addMinutesIso(createdAt, LOGIN_CODE_TTL_MINUTES)
+
+  const result = sqlite
+    .prepare(
+      `
+      INSERT INTO login_codes(phone, code_hash, expires_at, used_at, request_ip)
+      VALUES (?, ?, ?, NULL, ?)
+    `,
+    )
+    .run(phone, codeHash, expiresAt, requestIp)
 
   return Number(result.lastInsertRowid)
 }

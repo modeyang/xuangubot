@@ -10,12 +10,22 @@ export async function loadArticleById(id: number) {
 export async function listPremiumArticles(type: string, limit = 10) {
   const { orm } = getDb()
   return orm
-    .select()
+    .select({
+      id: articles.id,
+      slug: articles.slug,
+      title: articles.title,
+      excerpt: articles.excerpt,
+      articleType: articles.articleType,
+      visibility: articles.visibility,
+      status: articles.status,
+      coverUrl: articles.coverUrl,
+      publishedAt: articles.publishedAt,
+      sourceName: articles.sourceName,
+    })
     .from(articles)
     .where(
       and(
         eq(articles.articleType, type),
-        eq(articles.visibility, 'premium'),
         eq(articles.status, 'published'),
       ),
     )
@@ -23,4 +33,3 @@ export async function listPremiumArticles(type: string, limit = 10) {
     .limit(limit)
     .all()
 }
-

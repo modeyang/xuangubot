@@ -221,8 +221,407 @@ paths:
         '400':
           description: Invalid query
 
+  /api/auth/request-code:
+    post:
+      summary: Request login code (fake SMS)
+      description: |
+        Requests a one-time login code for the provided phone number.
+
+        In non-development environments (`APP_ENV !== development`), the phone must be allowlisted
+        in `beta_access_phones` with `enabled=1`.
+
+        The code is never returned from this endpoint. Admins can view the latest debug code
+        via the beta access admin tooling.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [phone]
+              properties:
+                phone:
+                  type: string
+                  description: Phone number (digits only or formatted; server normalizes to digits).
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok]
+                properties:
+                  ok: { type: boolean }
+        '400':
+          description: Invalid input
+        '403':
+          description: Not allowlisted (non-development)
+        '429':
+          description: Rate limited
+
+  /api/auth/verify-code:
+    post:
+      summary: Verify login code and create session
+      description: |
+        Verifies a one-time code and sets a signed HTTP-only `xgt_session_token` cookie.
+
+        In non-development environments (`APP_ENV !== development`), the phone must be allowlisted
+        in `beta_access_phones` with `enabled=1`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [phone, code]
+              properties:
+                phone: { type: string }
+                code: { type: string, description: 6-digit code }
+      responses:
+        '200':
+          description: OK
+          headers:
+            Set-Cookie:
+              schema: { type: string }
+              description: Signed HTTP-only session cookie (`xgt_session_token`).
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, user]
+                properties:
+                  ok: { type: boolean }
+                  user:
+                    $ref: '#/components/schemas/User'
+        '400':
+          description: Invalid input or invalid code
+        '403':
+          description: Not allowlisted (non-development)
+        '429':
+          description: Rate limited or temporarily locked out
+
+  /api/auth/logout:
+    post:
+      summary: Logout
+      description: Clears the session cookie and deletes the server-side session (if present).
+      responses:
+        '200':
+          description: OK
+          headers:
+            Set-Cookie:
+              schema: { type: string }
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok]
+                properties:
+                  ok: { type: boolean }
+
+  /api/me:
+    get:
+      summary: Current session user
+      description: Returns the current logged-in user from the session cookie, or null.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [user]
+                properties:
+                  user:
+                    anyOf:
+                      - $ref: '#/components/schemas/User'
+                    nullable: true
+
+  /api/admin/beta-access:
+    get:
+      summary: Beta allowlist and debug codes
+      description: Admin-only endpoint for listing allowlisted phones and latest debug OTP codes.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [phones, debugCodes]
+                properties:
+                  phones:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/BetaAccessPhone'
+                  debugCodes:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/DebugCode'
+        '401':
+          description: Not authenticated
+        '403':
+          description: Admin only
+    post:
+      summary: Mutate beta allowlist
+      description: Admin-only endpoint to add, enable, disable, or remove allowlisted phones.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [action, phone]
+              properties:
+                action:
+                  type: string
+                  enum: [add, enable, disable, remove]
+                phone:
+                  type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok]
+                properties:
+                  ok: { type: boolean }
+                  inserted: { type: boolean, nullable: true }
+        '400':
+          description: Invalid input
+        '401':
+          description: Not authenticated
+        '403':
+          description: Admin only
+
+  /api/admin/articles/{id}/publish:
+    post:
+      summary: Publish an article
+      description: |
+        Admin-only endpoint that publishes an article.
+
+        Behavior:
+        - Derives `body_html` from `body_markdown`
+        - Sets `status=published` and `published_at`
+        - Updates `search_documents` (FTS) for public articles
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                publishedAt:
+                  type: string
+                  format: date-time
+                  description: Optional override; defaults to now.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, id, publishedAt]
+                properties:
+                  ok: { type: boolean }
+                  id: { type: integer }
+                  publishedAt: { type: string, format: date-time }
+        '400':
+          description: Invalid input
+        '401':
+          description: Not authenticated
+        '403':
+          description: Admin only
+        '404':
+          description: Not found
+
+  /api/admin/articles/{id}/unpublish:
+    post:
+      summary: Unpublish an article
+      description: |
+        Admin-only endpoint that unpublishes an article.
+
+        Behavior:
+        - Sets `status=draft` and clears `published_at`
+        - Removes search visibility from `search_documents` (FTS)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, id]
+                properties:
+                  ok: { type: boolean }
+                  id: { type: integer }
+        '400':
+          description: Invalid input
+        '401':
+          description: Not authenticated
+        '403':
+          description: Admin only
+        '404':
+          description: Not found
+
+  /api/admin/homepage-modules:
+    post:
+      summary: Manage homepage modules
+      description: |
+        Admin-only endpoint for homepage module editing.
+
+        Supported actions:
+        - `list`: list all modules (including disabled)
+        - `setEnabled`: enable/disable a module
+        - `setTitle`: change a module title
+        - `setConfig`: update `config_json` with validation based on `module_key`
+        - `reorder`: set a new module ordering
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [action]
+              properties:
+                action: { type: string }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [modules]
+                properties:
+                  modules:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/HomepageModuleAdmin'
+        '400':
+          description: Invalid input
+        '401':
+          description: Not authenticated
+        '403':
+          description: Admin only
+
+  /api/admin/theme-stocks/sync:
+    post:
+      summary: Sync/correct theme-stock relations
+      description: |
+        Admin-only endpoint for manual correction or best-effort resync of `theme_stocks`.
+
+        Actions:
+        - `correct`: replace all relations for a theme using provided stock symbols
+        - `resync`: rebuild relations from the latest `theme_snapshots.payload_json` (best-effort)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [action, themeId]
+              properties:
+                action: { type: string, enum: [correct, resync] }
+                themeId: { type: integer }
+                symbols:
+                  type: array
+                  items: { type: string }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, themeId, appliedSymbols, missingSymbols, source]
+                properties:
+                  ok: { type: boolean }
+                  themeId: { type: integer }
+                  appliedSymbols:
+                    type: array
+                    items: { type: string }
+                  missingSymbols:
+                    type: array
+                    items: { type: string }
+                  source: { type: string }
+        '400':
+          description: Invalid input
+        '401':
+          description: Not authenticated
+        '403':
+          description: Admin only
+        '404':
+          description: Not found
+
+  /api/admin/ingest-runs:
+    get:
+      summary: List ingestion runs
+      description: Admin-only endpoint for listing recent ingestion runs.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [runs]
+                properties:
+                  runs:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/IngestRun'
+        '401':
+          description: Not authenticated
+        '403':
+          description: Admin only
+
+  /api/admin/orders:
+    get:
+      summary: List orders
+      description: Admin-only endpoint for listing recent orders.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [orders]
+                properties:
+                  orders:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/OrderAdmin'
+        '401':
+          description: Not authenticated
+        '403':
+          description: Admin only
+
 components:
   schemas:
+    User:
+      type: object
+      required: [id, phone, role, displayName]
+      properties:
+        id: { type: integer }
+        phone: { type: string }
+        role: { type: string }
+        displayName: { type: string, nullable: true }
+
     HomeModule:
       type: object
       required: [id, moduleKey, title]
@@ -232,6 +631,44 @@ components:
         title: { type: string }
         sortOrder: { type: integer, nullable: true }
         config: { nullable: true }
+
+    HomepageModuleAdmin:
+      type: object
+      required: [id, moduleKey, title, enabled]
+      properties:
+        id: { type: integer }
+        moduleKey: { type: string }
+        title: { type: string }
+        configJson: { type: string, nullable: true }
+        sortOrder: { type: integer, nullable: true }
+        enabled: { type: boolean }
+
+    IngestRun:
+      type: object
+      required: [id, jobName, startedAt, status]
+      properties:
+        id: { type: integer }
+        jobName: { type: string }
+        sourceName: { type: string, nullable: true }
+        startedAt: { type: string, format: date-time }
+        finishedAt: { type: string, format: date-time, nullable: true }
+        status: { type: string }
+        summaryJson: { type: string, nullable: true }
+
+    OrderAdmin:
+      type: object
+      required: [id, status, provider, amountCents, createdAt, userId, userPhone, planCode]
+      properties:
+        id: { type: integer }
+        status: { type: string }
+        provider: { type: string }
+        amountCents: { type: integer }
+        providerOrderId: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+        paidAt: { type: string, format: date-time, nullable: true }
+        userId: { type: integer }
+        userPhone: { type: string }
+        planCode: { type: string }
 
     Plan:
       type: object
@@ -243,6 +680,23 @@ components:
         durationDays: { type: integer }
         priceCents: { type: integer }
         enabled: { type: integer, description: '0 or 1 from SQLite' }
+
+    BetaAccessPhone:
+      type: object
+      required: [phone, enabled, createdAt]
+      properties:
+        phone: { type: string }
+        enabled: { type: integer, description: '0 or 1 from SQLite' }
+        createdAt: { type: string }
+        createdBy: { type: integer, nullable: true }
+
+    DebugCode:
+      type: object
+      required: [phone, codePlain, createdAt]
+      properties:
+        phone: { type: string }
+        codePlain: { type: string }
+        createdAt: { type: string }
 
     Stock:
       type: object

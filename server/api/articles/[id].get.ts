@@ -1,39 +1,51 @@
-import { defineEventHandler, createError, getRouterParam, setHeader } from 'h3'
+import { defineEventHandler, getRouterParam, setHeader, setResponseStatus } from 'h3'
 import { z } from 'zod'
 import { getDb } from '../../utils/db'
 import { loadArticleById } from '../../repositories/articles'
 
+const PRIVATE_CACHE_HEADERS = {
+  'Cache-Control': 'private, no-store',
+  Vary: 'Cookie',
+}
+
 function safeNumericId(raw: unknown) {
   const parsed = z.string().regex(/^[0-9]+$/).safeParse(raw)
   if (!parsed.success) {
-    throw createError({ statusCode: 400, statusMessage: 'invalid article id' })
+    return null
   }
   const id = Number(parsed.data)
   if (!Number.isSafeInteger(id)) {
-    throw createError({ statusCode: 400, statusMessage: 'invalid article id' })
+    return null
   }
   return id
 }
 
 export default defineEventHandler(async (event) => {
+  setHeader(event, 'Cache-Control', PRIVATE_CACHE_HEADERS['Cache-Control'])
+  setHeader(event, 'Vary', PRIVATE_CACHE_HEADERS.Vary)
+
   const id = safeNumericId(getRouterParam(event, 'id'))
+  if (id === null) {
+    setResponseStatus(event, 400, 'invalid article id')
+    return { statusCode: 400, statusMessage: 'invalid article id' }
+  }
 
   const article = await loadArticleById(id)
   if (!article) {
-    throw createError({ statusCode: 404, statusMessage: `article not found: ${id}` })
+    setResponseStatus(event, 404, `article not found: ${id}`)
+    return { statusCode: 404, statusMessage: `article not found: ${id}` }
+  }
+
+  // Public read API: unpublished content is not publicly readable.
+  // Admin tools can still see draft rows via direct DB access, but the public API should 404.
+  if (article.status !== 'published') {
+    setResponseStatus(event, 404, `article not found: ${id}`)
+    return { statusCode: 404, statusMessage: `article not found: ${id}` }
   }
 
   // Public read API has no auth surface in Task 4: premium content is not accessible.
   const visibility = article.visibility
   const allowed = visibility === 'public'
-
-  setHeader(
-    event,
-    'Cache-Control',
-    allowed
-      ? 'public, max-age=0, s-maxage=3600, stale-while-revalidate=3600'
-      : 'public, max-age=0, s-maxage=60, stale-while-revalidate=60',
-  )
 
   const { sqlite } = getDb()
 

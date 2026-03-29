@@ -39,6 +39,10 @@ export async function prepareTestDb() {
   if (preparePromise) return preparePromise
 
   preparePromise = (async () => {
+    // Ensure code paths that allow dev/test defaults (e.g. session signing secret) can
+    // reliably detect test execution, including inside Nuxt/Nitro runtime.
+    process.env.NODE_ENV = process.env.NODE_ENV ?? 'test'
+
     if (!tempDir) {
       tempDir = mkdtempSync(join(tmpdir(), 'xgt-test-'))
       process.env.DB_PATH = join(tempDir, 'test.sqlite')

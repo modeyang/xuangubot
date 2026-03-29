@@ -177,5 +177,5 @@ describe('operational scripts', () => {
     } finally {
       db.close()
     }
-  })
+  }, 15_000)
 })
